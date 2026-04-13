@@ -3,7 +3,7 @@
 #  deploy.sh — Déploiement / mise à jour Kafka UI sur VPS
 #
 #  Ce script est auto-suffisant :
-#    - 1er run  : clone le repo depuis GitHub et déploie tout
+#    - 1er run  : clone le repo depuis GitHub dans /opt/kafka_ui
 #    - Runs suivants : pull les changements et redémarre si nécessaire
 #
 #  Usage : sudo bash deploy.sh
@@ -42,7 +42,7 @@ if docker compose version >/dev/null 2>&1; then
 elif docker-compose version >/dev/null 2>&1; then
   COMPOSE="docker-compose"
 else
-  err "Docker Compose introuvable. Installez-le avec : apt install docker-compose-plugin"
+  err "Docker Compose introuvable. Lancez : apt install docker-compose-plugin"
 fi
 
 # =============================================================================
@@ -74,7 +74,7 @@ else
   cd "$APP_DIR"
 
   # Récupère les infos distantes sans merger
-  git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || git fetch origin
+  git fetch origin 2>/dev/null
 
   LOCAL=$(git rev-parse HEAD)
   REMOTE=$(git rev-parse '@{u}' 2>/dev/null || echo "unknown")
@@ -86,7 +86,7 @@ else
     info "Nouveau(x) commit(s) détecté(s)"
     info "  Local  : ${LOCAL:0:8}"
     info "  Remote : ${REMOTE:0:8}"
-    git pull --rebase origin main 2>/dev/null || git pull --rebase origin master 2>/dev/null || git pull
+    git pull --rebase
     ok "Code mis à jour → commit ${REMOTE:0:8}"
     CODE_CHANGED=true
   fi
@@ -123,30 +123,31 @@ log "Attente du démarrage des apps (max 60s)..."
 
 READY_P=false
 READY_C=false
+STATUS_P="000"
+STATUS_C="000"
 
 for i in $(seq 1 20); do
   sleep 3
-  if ! $READY_P; then
+  if [ "$READY_P" = false ]; then
     STATUS_P=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${PRODUCER_PORT}/ 2>/dev/null || echo "000")
     [ "$STATUS_P" = "200" ] && READY_P=true && ok "Producer (${PRODUCER_PORT}) : HTTP 200"
   fi
-  if ! $READY_C; then
+  if [ "$READY_C" = false ]; then
     STATUS_C=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${CONSUMER_PORT}/ 2>/dev/null || echo "000")
     [ "$STATUS_C" = "200" ] && READY_C=true && ok "Consumer (${CONSUMER_PORT}) : HTTP 200"
   fi
-  $READY_P && $READY_C && break
-  log "Tentative $i/20 — Producer: ${STATUS_P:-...} | Consumer: ${STATUS_C:-...}"
+  [ "$READY_P" = true ] && [ "$READY_C" = true ] && break
+  log "Tentative $i/20 — Producer: ${STATUS_P} | Consumer: ${STATUS_C}"
 done
 
-$READY_P || warn "Producer ne répond pas sur le port ${PRODUCER_PORT}"
-$READY_C || warn "Consumer ne répond pas sur le port ${CONSUMER_PORT}"
+[ "$READY_P" = false ] && warn "Producer ne répond pas sur le port ${PRODUCER_PORT} — vérifiez : $COMPOSE logs producer"
+[ "$READY_C" = false ] && warn "Consumer ne répond pas sur le port ${CONSUMER_PORT} — vérifiez : $COMPOSE logs consumer"
 
 # =============================================================================
-#  ÉTAPE 5 — Config Nginx (idempotente : ne réécrit que si pas de SSL en place)
+#  ÉTAPE 5 — Config Nginx (idempotente)
 # =============================================================================
 
-# Fonction qui écrit une config Nginx seulement si elle n'a pas encore été
-# enrichie par Certbot (on détecte la présence de "ssl_certificate")
+# N'écrit la config que si Certbot ne l'a pas encore enrichie avec le SSL
 write_nginx_if_needed() {
   local FILE="$1"
   local CONTENT="$2"
@@ -161,8 +162,7 @@ write_nginx_if_needed() {
 
 log "Configuration Nginx..."
 
-PRODUCER_CONF=$(cat <<EOF
-server {
+PRODUCER_CONF="server {
     listen 80;
     server_name ${PRODUCER_DOMAIN};
 
@@ -175,12 +175,9 @@ server {
         proxy_buffering    off;
         proxy_read_timeout 120s;
     }
-}
-EOF
-)
+}"
 
-CONSUMER_CONF=$(cat <<EOF
-server {
+CONSUMER_CONF="server {
     listen 80;
     server_name ${CONSUMER_DOMAIN};
 
@@ -197,9 +194,7 @@ server {
         proxy_set_header        Connection '';
         chunked_transfer_encoding on;
     }
-}
-EOF
-)
+}"
 
 write_nginx_if_needed "$NGINX_AVAILABLE/$PRODUCER_DOMAIN" "$PRODUCER_CONF"
 write_nginx_if_needed "$NGINX_AVAILABLE/$CONSUMER_DOMAIN" "$CONSUMER_CONF"
@@ -208,7 +203,7 @@ write_nginx_if_needed "$NGINX_AVAILABLE/$CONSUMER_DOMAIN" "$CONSUMER_CONF"
 ln -sf "$NGINX_AVAILABLE/$PRODUCER_DOMAIN" "$NGINX_ENABLED/$PRODUCER_DOMAIN"
 ln -sf "$NGINX_AVAILABLE/$CONSUMER_DOMAIN" "$NGINX_ENABLED/$CONSUMER_DOMAIN"
 
-nginx -t || err "Config Nginx invalide, vérifiez les fichiers dans $NGINX_AVAILABLE"
+nginx -t || err "Config Nginx invalide — vérifiez les fichiers dans $NGINX_AVAILABLE"
 systemctl reload nginx
 ok "Nginx rechargé"
 
@@ -252,7 +247,7 @@ echo -e "  Producer  →  https://${PRODUCER_DOMAIN}"
 echo -e "  Consumer  →  https://${CONSUMER_DOMAIN}"
 echo ""
 echo -e "Commandes utiles :"
-echo -e "  ${CYAN}$COMPOSE -f $APP_DIR/docker-compose.yaml logs -f${NC}"
-echo -e "  ${CYAN}$COMPOSE -f $APP_DIR/docker-compose.yaml ps${NC}"
-echo -e "  ${CYAN}$COMPOSE -f $APP_DIR/docker-compose.yaml restart producer${NC}"
+echo -e "  ${CYAN}cd $APP_DIR && $COMPOSE logs -f${NC}"
+echo -e "  ${CYAN}cd $APP_DIR && $COMPOSE ps${NC}"
+echo -e "  ${CYAN}cd $APP_DIR && $COMPOSE restart producer${NC}"
 echo ""

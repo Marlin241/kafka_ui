@@ -7,10 +7,13 @@ from kafka_admin import ensure_topics, get_brokers, APP_TOPICS
 app = Flask(__name__, template_folder="templates")
 SSE_HEARTBEAT_SECONDS = 15
 
+# Démarrage du consumer dès l'import du module
+# (fonctionne avec Gunicorn post_fork via gunicorn_config.py)
+kc.start_consumer_manager()
+
 
 @app.route("/")
 def index():
-    kc.start_consumer_manager()
     return render_template("consumer.html")
 
 
@@ -65,7 +68,6 @@ def api_stream():
                 yield f"data: {json.dumps(m)}\n\n"
             now = time.monotonic()
             if not new_msgs and now - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
-                # Keep SSE connections alive through idle periods and proxies.
                 yield ": keepalive\n\n"
                 last_heartbeat = now
             time.sleep(0.8)
@@ -83,5 +85,4 @@ if __name__ == "__main__":
         ensure_topics()
     except Exception as e:
         print(f"[Init] Kafka pas encore disponible : {e}")
-    kc.start_consumer_manager()
     app.run(debug=True, port=5003, use_reloader=False)

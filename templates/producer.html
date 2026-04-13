@@ -509,7 +509,7 @@ textarea:focus { border-color: var(--ink); }
     </div>
     <div class="sidebar-link">
       <div class="sidebar-link-label">Consumer</div>
-      <a href="http://localhost:5002" target="_blank">localhost:5002 &rarr;</a>
+      <a href="https://consumer.digitalko.space/" target="_blank">Consumer &rarr;</a>
     </div>
   </aside>
 
@@ -532,13 +532,13 @@ textarea:focus { border-color: var(--ink); }
         <div class="card">
           <div class="card-head">
             <span class="card-ttl">Payload</span>
-            <span style="font-family:var(--font-mono);font-size:9px;color:var(--ink-3);">JSON ou texte</span>
+            <span style="font-family:var(--font-mono);font-size:9px;color:var(--ink-3);">Texte</span>
           </div>
           <div class="card-body">
-            <textarea id="prod-payload" placeholder='{"cle": "valeur"}'></textarea>
+            <textarea id="prod-payload" placeholder='Entrez votre text ici...'></textarea>
             <div class="btn-row">
               <button class="btn btn-primary" onclick="produce()">Envoyer</button>
-              <button class="btn btn-outline" onclick="formatJSON()">Formater</button>
+              {% comment %} <button class="btn btn-outline" onclick="formatJSON()">Formater</button> {% endcomment %}
               <button class="btn btn-outline" onclick="clearPayload()">Vider</button>
             </div>
           </div>

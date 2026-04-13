@@ -5,6 +5,7 @@ import kafka_consumer as kc
 from kafka_admin import ensure_topics, get_brokers, APP_TOPICS
 
 app = Flask(__name__, template_folder="templates")
+SSE_HEARTBEAT_SECONDS = 15
 
 
 @app.route("/")
@@ -49,6 +50,7 @@ def api_messages():
 def api_stream():
     def generate():
         seen = set()
+        last_heartbeat = time.monotonic()
         while True:
             with kc.messages_lock:
                 with kc.subscription_lock:
@@ -61,6 +63,11 @@ def api_stream():
                             seen.add(m["id"])
             for m in reversed(new_msgs):
                 yield f"data: {json.dumps(m)}\n\n"
+            now = time.monotonic()
+            if not new_msgs and now - last_heartbeat >= SSE_HEARTBEAT_SECONDS:
+                # Keep SSE connections alive through idle periods and proxies.
+                yield ": keepalive\n\n"
+                last_heartbeat = now
             time.sleep(0.8)
 
     return Response(

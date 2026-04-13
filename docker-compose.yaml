@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     container_name: kafka_consumer
     restart: unless-stopped
-    command: gunicorn -w 1 -b 0.0.0.0:5003 --timeout 120 --worker-class gthread --threads 4 consumer_app:app
+    command: gunicorn -w 1 -b 0.0.0.0:5003 --timeout 120 --worker-class gthread --threads 12 consumer_app:app
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:

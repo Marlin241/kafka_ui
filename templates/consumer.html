@@ -530,6 +530,8 @@ const LABELS = {
 
 let active = "all";
 let store = Object.fromEntries(APP_TOPICS.map(t => [t, []]));
+let stream = null;
+let brokerCheckInFlight = false;
 
 function toast(msg, type = 'ok') {
   const el = document.createElement('div');
@@ -613,8 +615,9 @@ function clearMessages() {
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function startStream() {
-  const es = new EventSource('/api/stream');
-  es.onmessage = (e) => {
+  if (stream) return;
+  stream = new EventSource('/api/stream');
+  stream.onmessage = (e) => {
     const m = JSON.parse(e.data);
     const t = m.topic;
     if (!store[t]) store[t] = [];
@@ -626,12 +629,31 @@ function startStream() {
     if (ca) ca.textContent = Object.values(store).reduce((a,b) => a+b.length, 0);
     renderFeed();
   };
-  es.onerror = () => setTimeout(startStream, 3000);
+  stream.onerror = () => {
+    // EventSource already retries automatically; spawning a new instance here
+    // quickly creates duplicate streams and exhausts Gunicorn threads.
+    if (stream?.readyState === EventSource.CLOSED) {
+      stream = null;
+      setTimeout(startStream, 3000);
+    }
+  };
 }
 
+window.addEventListener('beforeunload', () => stream?.close());
+
 async function checkBroker() {
+  if (brokerCheckInFlight) return;
+  brokerCheckInFlight = true;
+  let timeoutId = null;
   try {
-    const d = await (await fetch('/api/broker')).json();
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 4000);
+    const response = await fetch('/api/broker', {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const d = await response.json();
     const dot = document.getElementById('status-dot');
     if (d.connected) {
       dot.className = 'broker-dot on';
@@ -644,7 +666,13 @@ async function checkBroker() {
       dot.className = 'broker-dot err';
       document.getElementById('status-text').textContent = 'hors ligne';
     }
-  } catch {}
+  } catch {
+    document.getElementById('status-dot').className = 'broker-dot err';
+    document.getElementById('status-text').textContent = 'hors ligne';
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    brokerCheckInFlight = false;
+  }
 }
 
 (async () => {

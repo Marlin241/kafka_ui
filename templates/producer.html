@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kafka — Producer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+
+/* ────────────────────────────────────────────────
+   TOKENS
+───────────────────────────────────────────────── */
+:root {
+  --paper:      #f5f2ed;
+  --paper2:     #edeae4;
+  --ink:        #1a1814;
+  --ink-2:      #4a4640;
+  --ink-3:      #9a9590;
+  --rule:       #d8d4ce;
+  --rule-heavy: #b8b3ac;
+
+  --lime:       #c8f230;
+  --lime-bg:    #f0fad0;
+  --red:        #e63726;
+  --blue:       #1a52e8;
+  --blue-bg:    #dce7fd;
+  --orange:     #f5780a;
+  --purple:     #8b3cf7;
+
+  --c-nourriture:   #f5780a;
+  --c-electronique: #1a52e8;
+  --c-vetements:    #8b3cf7;
+  --c-cosmetique:   #e63726;
+
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans:    'Archivo', system-ui, sans-serif;
+  --font-mono:    'DM Mono', 'Courier New', monospace;
+
+  --r: 3px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ────────────────────────────────────────────────
+   TOPBAR
+───────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  border-bottom: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  position: relative;
+  z-index: 100;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 20px;
+  border-right: 2px solid rgba(255,255,255,0.15);
+  white-space: nowrap;
+}
+
+.brand-name {
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.brand-slash {
+  color: var(--lime);
+  font-size: 20px;
+  font-weight: 300;
+  margin: 0 8px;
+  line-height: 1;
+}
+
+.brand-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--lime);
+  font-weight: 500;
+}
+
+.topbar-stats {
+  display: flex;
+  flex: 1;
+}
+
+.topbar-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 18px;
+  border-right: 1px solid rgba(255,255,255,0.1);
+  min-width: 120px;
+}
+
+.cell-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 1px;
+}
+
+.cell-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.cell-value.accent { color: var(--lime); }
+
+.topbar-broker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
+
+.broker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #555;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.broker-dot.on  { background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: blip 2s ease infinite; }
+.broker-dot.err { background: var(--red); }
+@keyframes blip { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ────────────────────────────────────────────────
+   LAYOUT
+───────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  height: calc(100vh - 48px);
+}
+
+/* ────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────── */
+.sidebar {
+  border-right: 2px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.sidebar-section {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sidebar-ttl {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 12px;
+}
+
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.topic-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: var(--r);
+}
+
+.topic-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.t-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.t-bar.nourriture   { background: var(--c-nourriture); }
+.t-bar.electronique { background: var(--c-electronique); }
+.t-bar.vetements    { background: var(--c-vetements); }
+.t-bar.cosmetique   { background: var(--c-cosmetique); }
+
+.t-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.t-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  background: var(--paper2);
+  border: 1px solid var(--rule);
+  padding: 0 5px;
+  border-radius: 10px;
+}
+
+.sidebar-link {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.sidebar-link a {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--blue);
+  text-decoration: none;
+}
+.sidebar-link a:hover { text-decoration: underline; }
+
+.sidebar-link-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  margin-bottom: 3px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ────────────────────────────────────────────────
+   MAIN
+───────────────────────────────────────────────── */
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.work-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 20px;
+  align-content: start;
+}
+
+.work-area::-webkit-scrollbar { width: 4px; }
+.work-area::-webkit-scrollbar-thumb { background: var(--rule-heavy); border-radius: 2px; }
+
+/* ────────────────────────────────────────────────
+   CARDS
+───────────────────────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1.5px solid var(--rule-heavy);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.card-head {
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--rule-heavy);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-ttl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.card-body { padding: 16px; }
+
+/* ────────────────────────────────────────────────
+   TOPIC SELECTOR
+───────────────────────────────────────────────── */
+.topic-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.topic-tile {
+  border: 1.5px solid var(--rule);
+  border-radius: var(--r);
+  padding: 11px 13px;
+  cursor: pointer;
+  transition: all 0.13s ease;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: transparent;
+  user-select: none;
+}
+
+.topic-tile:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper2);
+}
+
+.topic-tile.active.nourriture   { border-color: var(--c-nourriture);   background: #fff5ea; color: var(--c-nourriture); }
+.topic-tile.active.electronique { border-color: var(--c-electronique); background: #edf1fd; color: var(--c-electronique); }
+.topic-tile.active.vetements    { border-color: var(--c-vetements);    background: #f5effe; color: var(--c-vetements); }
+.topic-tile.active.cosmetique   { border-color: var(--c-cosmetique);   background: #fdecea; color: var(--c-cosmetique); }
+
+/* ────────────────────────────────────────────────
+   PAYLOAD
+───────────────────────────────────────────────── */
+textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  border: 1.5px solid var(--rule);
+  border-radius: var(--r);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+textarea::placeholder { color: var(--ink-3); }
+textarea:focus { border-color: var(--ink); }
+
+/* ────────────────────────────────────────────────
+   BUTTONS
+───────────────────────────────────────────────── */
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--lime);
+  border-color: var(--ink);
+}
+.btn-primary:hover { background: var(--ink-2); }
+.btn-primary:active { transform: scale(.97); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--ink-2);
+  border-color: var(--rule-heavy);
+}
+.btn-outline:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ────────────────────────────────────────────────
+   LOG
+───────────────────────────────────────────────── */
+.log-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.log-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.log-entry:last-child { border-bottom: none; }
+
+.log-time { color: var(--ink-3); }
+
+/* ────────────────────────────────────────────────
+   TOASTS
+───────────────────────────────────────────────── */
+.toast-zone {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 9px 14px;
+  border-radius: var(--r);
+  border: 1.5px solid;
+  animation: tIn 0.2s ease;
+  max-width: 280px;
+  pointer-events: auto;
+}
+.toast-ok  { background: #edfad2; border-color: #89c832; color: #3a6010; }
+.toast-err { background: #fdecea; border-color: var(--red); color: var(--red); }
+.toast-nfo { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+
+@keyframes tIn { from{transform:translateY(8px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+/* ────────────────────────────────────────────────
+   LEFT COL STACK
+───────────────────────────────────────────────── */
+.col-left  { display: flex; flex-direction: column; gap: 16px; }
+.col-right { display: flex; flex-direction: column; gap: 16px; }
+
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-name">Kafka</span>
+    <span class="brand-slash">/</span>
+    <span class="brand-role">Producer</span>
+  </div>
+  <div class="topbar-stats">
+    <div class="topbar-cell">
+      <div class="cell-label">Envoyés</div>
+      <div class="cell-value accent" id="stat-sent">0</div>
+    </div>
+    <div class="topbar-cell">
+      <div class="cell-label">Topic actif</div>
+      <div class="cell-value" id="stat-topic">—</div>
+    </div>
+    <div class="topbar-cell">
+      <div class="cell-label">Broker</div>
+      <div class="cell-value" id="stat-broker">—</div>
+    </div>
+  </div>
+  <div class="topbar-broker">
+    <div class="broker-dot" id="status-dot"></div>
+    <span id="status-text">—</span>
+  </div>
+</header>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-ttl">Topics</div>
+      <div class="topic-list" id="topic-nav"></div>
+    </div>
+    <div class="sidebar-link">
+      <div class="sidebar-link-label">Consumer</div>
+      <a href="http://localhost:5002" target="_blank">localhost:5002 &rarr;</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="work-area">
+
+      <div class="col-left">
+        <!-- Topic selector -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-ttl">Topic cible</span>
+          </div>
+          <div class="card-body">
+            <div class="topic-grid" id="topic-selector"></div>
+          </div>
+        </div>
+
+        <!-- Payload -->
+        <div class="card">
+          <div class="card-head">
+            <span class="card-ttl">Payload</span>
+            <span style="font-family:var(--font-mono);font-size:9px;color:var(--ink-3);">JSON ou texte</span>
+          </div>
+          <div class="card-body">
+            <textarea id="prod-payload" placeholder='{"cle": "valeur"}'></textarea>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="produce()">Envoyer</button>
+              <button class="btn btn-outline" onclick="formatJSON()">Formater</button>
+              <button class="btn btn-outline" onclick="clearPayload()">Vider</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-right">
+        <!-- Log -->
+        <div class="card" style="flex:1;">
+          <div class="card-head">
+            <span class="card-ttl">Derniers envois</span>
+          </div>
+          <div class="card-body" id="sent-log">
+            <div class="log-empty">Aucun envoi cette session.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<div class="toast-zone" id="toasts"></div>
+
+<script>
+const APP_TOPICS = ["nourriture", "electronique", "vetements", "cosmetique"];
+const LABELS = {
+  nourriture: "nourriture",
+  electronique: "\u00e9lectronique",
+  vetements: "v\u00eatements",
+  cosmetique: "cosm\u00e9tique"
+};
+const COLORS = {
+  nourriture:   "var(--c-nourriture)",
+  electronique: "var(--c-electronique)",
+  vetements:    "var(--c-vetements)",
+  cosmetique:   "var(--c-cosmetique)"
+};
+
+let sel = null, sentCount = 0, sentLog = [];
+let perTopic = Object.fromEntries(APP_TOPICS.map(t => [t, 0]));
+
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function renderSidebar() {
+  document.getElementById('topic-nav').innerHTML = APP_TOPICS.map(t => `
+    <div class="topic-entry">
+      <div class="topic-left">
+        <div class="t-bar ${t}"></div>
+        <span class="t-name">${LABELS[t]}</span>
+      </div>
+      <span class="t-badge" id="sidebar-${t}">${perTopic[t]}</span>
+    </div>
+  `).join('');
+}
+
+function renderSelector() {
+  document.getElementById('topic-selector').innerHTML = APP_TOPICS.map(t => `
+    <div class="topic-tile ${t} ${sel === t ? 'active ' + t : ''}" onclick="pick('${t}')">
+      <div class="t-bar ${t}" style="height:16px;"></div>
+      ${LABELS[t]}
+    </div>
+  `).join('');
+}
+
+function pick(t) {
+  sel = t;
+  document.getElementById('stat-topic').textContent = LABELS[t];
+  renderSelector();
+}
+
+async function produce() {
+  if (!sel) { toast('S\u00e9lectionnez un topic', 'nfo'); return; }
+  const raw = document.getElementById('prod-payload').value.trim();
+  if (!raw) { toast('Payload vide', 'nfo'); return; }
+  let parsed; try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+  try {
+    const r = await fetch('/api/produce', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: sel, payload: parsed })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`Envoy\u00e9 \u2192 ${LABELS[sel]}`, 'ok');
+      sentCount++; perTopic[sel]++;
+      document.getElementById('stat-sent').textContent = sentCount;
+      const c = document.getElementById(`sidebar-${sel}`);
+      if (c) c.textContent = perTopic[sel];
+      sentLog.unshift({ time: new Date().toLocaleTimeString(), topic: sel, preview: raw.slice(0, 50) });
+      if (sentLog.length > 8) sentLog.pop();
+      renderLog();
+    } else { toast(d.error || 'Erreur', 'err'); }
+  } catch { toast('Erreur de connexion', 'err'); }
+}
+
+function renderLog() {
+  const el = document.getElementById('sent-log');
+  if (!sentLog.length) { el.innerHTML = '<div class="log-empty">Aucun envoi cette session.</div>'; return; }
+  el.innerHTML = sentLog.map(s => `
+    <div class="log-entry">
+      <span class="log-time">${s.time}</span>
+      &ensp;&rarr;&ensp;<span style="color:${COLORS[s.topic]};font-weight:600;">${LABELS[s.topic]}</span>
+      &ensp;<span>${esc(s.preview)}${s.preview.length >= 50 ? '…' : ''}</span>
+    </div>
+  `).join('');
+}
+
+function formatJSON() {
+  const el = document.getElementById('prod-payload');
+  try { el.value = JSON.stringify(JSON.parse(el.value), null, 2); }
+  catch { toast('JSON invalide', 'err'); }
+}
+function clearPayload() { document.getElementById('prod-payload').value = ''; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function checkBroker() {
+  try {
+    const d = await (await fetch('/api/broker')).json();
+    const dot = document.getElementById('status-dot');
+    if (d.connected) {
+      dot.className = 'broker-dot on';
+      document.getElementById('status-text').textContent = 'connect\u00e9';
+      if (d.brokers?.[0]) {
+        const a = `${d.brokers[0].host}:${d.brokers[0].port}`;
+        document.getElementById('stat-broker').textContent = a;
+      }
+    } else {
+      dot.className = 'broker-dot err';
+      document.getElementById('status-text').textContent = 'hors ligne';
+    }
+  } catch {}
+}
+
+(async () => { renderSidebar(); renderSelector(); await checkBroker(); setInterval(checkBroker, 12000); })();
+</script>
+</body>
+</html>

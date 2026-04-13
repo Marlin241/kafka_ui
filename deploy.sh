@@ -27,7 +27,7 @@ info() { echo -e "${CYAN}[info]${NC}   $1"; }
 
 # ── Config ────────────────────────────────────────────────────
 REPO_URL="https://github.com/Marlin241/kafka_ui.git"
-APP_DIR="/opt/kafka-ui"
+APP_DIR="/opt/kafka_ui"
 PRODUCER_DOMAIN="producer.digitalko.space"
 CONSUMER_DOMAIN="consumer.digitalko.space"
 PRODUCER_PORT="5002"
